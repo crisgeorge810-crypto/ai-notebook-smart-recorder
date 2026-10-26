@@ -1,0 +1,57 @@
+
+name: Build AI Notebook APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Extract Android project ZIP
+        run: |
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No project ZIP file found in the repository."
+            exit 1
+          fi
+          mkdir -p source
+          unzip -o "$ZIP_FILE" -d source
+
+      - name: Find Android Gradle project
+        run: |
+          echo "Searching for Gradle build files..."
+          find source -type f \( -name "gradlew" -o -name "build.gradle" -o -name "build.gradle.kts" \)
+          GRADLEW=$(find source -type f -name "gradlew" | head -n 1)
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: The ZIP does not contain a Gradle wrapper (gradlew)."
+            exit 1
+          fi
+          chmod +x "$GRADLEW"
+          echo "GRADLEW=$GRADLEW" >> "$GITHUB_ENV"
+          echo "PROJECT_DIR=$(dirname "$GRADLEW")" >> "$GITHUB_ENV"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Notebook-APK
+          path: source/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
